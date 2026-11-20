@@ -345,8 +345,13 @@ function showMenu() {
     <div class="cin"><input id="rn" value="${esc(me.name)}" maxlength="10"><button class="btn" id="rnGo">변경</button></div>
     <label>성별</label>
     <div class="cin"><button class="btn ghost" id="gChg" style="flex:1">${me.gender ? esc(me.gender) + ' · 바꾸기' : '선택하기'}</button></div>
+    <label>PIN 바꾸기</label>
+    <div class="cin"><input id="pOld" inputmode="numeric" type="password" maxlength="4" placeholder="지금 PIN"><input id="pNew" inputmode="numeric" type="password" maxlength="4" placeholder="새 PIN 4자리"><button class="btn" id="pGo">변경</button></div>
+    ${admin ? `<label>멤버 PIN 초기화 (관리자)</label>
+    <div class="cin"><select id="rsName"><option value="">멤버 고르기</option>${(membersCache || []).map(m => `<option>${esc(m.name)}</option>`).join('')}</select><input id="rsPin" inputmode="numeric" maxlength="4" value="0000" style="max-width:90px"><button class="btn ghost" id="rsGo">초기화</button></div>
+    <div class="small" style="margin-top:4px">PIN을 잊은 멤버에게 새 PIN을 정해줘요. 로그인 후 본인이 바꾸도록 알려주세요.</div>` : ''}
     <label>관리자 모드 ${admin ? '✅ 켜짐' : ''}</label>
-    <div class="cin"><input id="ad" inputmode="numeric" type="password" placeholder="관리자 PIN"><button class="btn ghost" id="adGo">${admin ? '끄기' : '켜기'}</button></div>
+    <div class="cin"><input id="ad" inputmode="numeric" type="password" maxlength="6" placeholder="관리자 비밀번호 6자리"><button class="btn ghost" id="adGo">${admin ? '끄기' : '켜기'}</button></div>
     <div class="err" id="mErr"></div>
     <div class="acts"><button class="btn red" id="out">로그아웃</button><button class="btn ghost" id="cls" style="flex:1">닫기</button></div>
   </div></div>`;
@@ -358,6 +363,23 @@ function showMenu() {
     try { me = await run('api_rename', me.id, $('#rn').value); save(me); $('#modalRoot').innerHTML = ''; toast('이름을 바꿨어요'); refresh(); }
     catch (e) { $('#mErr').textContent = errMsg(e); }
   };
+  $('#pGo').onclick = async () => {
+    $('#mErr').textContent = '';
+    try { await run('api_changePin', me.id, $('#pOld').value.trim(), $('#pNew').value.trim()); $('#pOld').value = $('#pNew').value = ''; toast('PIN을 바꿨어요'); }
+    catch (e) { $('#mErr').textContent = errMsg(e); }
+  };
+  if ($('#rsGo')) {
+    if (!membersCache) run('api_members', me.id).then(list => { membersCache = list; const s = $('#rsName'); if (s) s.innerHTML = '<option value="">멤버 고르기</option>' + list.map(m => `<option>${esc(m.name)}</option>`).join(''); }).catch(() => {});
+    $('#rsGo').onclick = async () => {
+      const n = $('#rsName').value, p = $('#rsPin').value.trim();
+      $('#mErr').textContent = '';
+      if (!n) { $('#mErr').textContent = '멤버를 고르세요.'; return; }
+      if (!/^\d{4}$/.test(p)) { $('#mErr').textContent = 'PIN은 숫자 4자리예요.'; return; }
+      if (!(await confirmBox(`${n}님의 PIN을 ${p}(으)로 바꿀까요?`, '초기화'))) return;
+      try { await run('api_resetPin', me.id, admin, n, p); toast(`${n}님 PIN을 ${p}(으)로 바꿨어요`); }
+      catch (e) { $('#mErr').textContent = errMsg(e); }
+    };
+  }
   $('#adGo').onclick = async () => {
     if (admin) { admin = null; try { localStorage.removeItem('climbVoteAdmin'); } catch (e) {} $('#modalRoot').innerHTML = ''; render(); return; }
     const p = $('#ad').value.trim();
