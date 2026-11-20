@@ -74,6 +74,28 @@
   .cfm .bt button+button{border-left:1px solid #444}
   .cfm .bt .ok{color:#ff6b6b;font-weight:700}
   .cm .c b{margin-right:6px}
+  .igrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
+  .icard{position:relative;display:flex;gap:9px;align-items:flex-start;text-align:left;width:100%;min-width:0;background:var(--card2);border:1.5px solid #3a3a3c;border-radius:16px;padding:9px;color:var(--txt);font-size:15px;min-height:84px}
+  .icard[disabled]{opacity:1}
+  .icard .ithumb{width:clamp(50px,15vw,84px);aspect-ratio:1;border-radius:12px;object-fit:cover;flex:none;background:#3a3a3c}
+  .icard .itx{flex:1;min-width:0;padding-right:18px}
+  .icard .no{display:block;color:var(--acc);font-size:12px;font-weight:800;margin-top:1px}
+  .icard .lab{display:block;font-size:14px;line-height:1.25;word-break:keep-all;overflow-wrap:anywhere;margin-top:2px}
+  .icard .chk{position:absolute;top:9px;right:9px}
+  .icard .ifoot{display:flex;align-items:flex-end;gap:4px;margin-top:6px}
+  .icard .who{display:flex;flex-wrap:wrap;gap:4px;flex:1;min-width:0}
+  .icard .who .chip{font-size:12px;padding:3px 7px}
+  .icard .cnt{margin-left:auto;font-size:13px;font-weight:700;color:var(--sub);white-space:nowrap}
+  .icard.mine{border-color:var(--acc);background:#2a2640}
+  .icard.mine .cnt{color:var(--acc)}
+  .icard.sel{border-color:#fff;border-style:dashed}
+  .multi .icard .chk{border-radius:5px}
+  .icard.mine .chk{border-color:var(--acc);background:var(--acc);box-shadow:inset 0 0 0 3px var(--card2)}
+  .etc{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);margin:14px 0 2px}
+  .etc:after{content:'';flex:1;height:1px;background:var(--line)}
+  .oimg{position:relative;flex:none;width:42px;height:42px;border-radius:10px;border:1px dashed #555;background:var(--card2);color:var(--sub);font-size:18px;padding:0;overflow:visible}
+  .oimg img{width:100%;height:100%;object-fit:cover;border-radius:9px;display:block}
+  .oimg .x{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:#ff6b6b;color:#fff;font-size:12px;line-height:18px;text-align:center}
   .cm .c span.t{color:var(--sub);font-size:11px;margin-left:6px}
   .cin{display:flex;gap:6px;margin-top:8px}
   input,textarea,select{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:12px;padding:11px 12px;font-size:16px;font-family:inherit}
@@ -148,7 +170,7 @@ async function run(fn, ...args) {
       return j.r;
     } catch (e) {
       lastErr = e;
-      if (e instanceof TypeError && attempt === 0 && /^api_(state|history|members|stats|check)/.test(fn)) { await new Promise(r => setTimeout(r, 600)); continue; } // 읽기만 하는 요청은 순간 오류면 한 번 더
+      if (e instanceof TypeError && attempt === 0 && /^api_(state|history|members|stats|check|images)/.test(fn)) { await new Promise(r => setTimeout(r, 600)); continue; } // 읽기만 하는 요청은 순간 오류면 한 번 더
       break;
     }
   }
@@ -334,7 +356,7 @@ function showCreate(ep) {
   $('#modalRoot').innerHTML = `
   <div class="modal" id="bg"><div class="sheet">
     <h2>${ep ? '투표 수정' : '새 투표 만들기'}</h2>
-    ${isDaily ? '<div class="small">데일리 투표 (오늘 것만 바뀌어요. 매일 기본 항목은 시트의 데일리항목 탭에서 바꿔요)</div>'
+    ${isDaily ? '<div class="small">데일리 투표 (항목 글자는 오늘 것만 바뀌어요. 📷 이미지는 같은 이름 항목에 매일 계속 붙어요)</div>'
       : `<div class="seg" id="tSeg">${['번개', '원정', '기타'].map(x => `<button class="${x === type ? 'on' : ''}">${x}</button>`).join('')}</div>`}
     <label>제목</label><input id="cT" maxlength="60" placeholder="예: 오늘 밤 서면 번개 ⚡" value="${ep ? esc(ep.title) : ''}">
     <label>모이는 날짜</label><input id="cD" type="date" value="${ep ? esc(ep.date) : dl.slice(0,10)}">
@@ -351,29 +373,44 @@ function showCreate(ep) {
   document.querySelectorAll('#tSeg button').forEach(b => b.onclick = () => {
     document.querySelectorAll('#tSeg button').forEach(x => x.classList.remove('on')); b.classList.add('on'); type = b.textContent;
   });
-  let items = ep ? ep.options.map((o, i) => ({ orig: i, text: o, votes: ep.voters[i].length }))
-    : ['참석 🙋', '고민중 🤔', '불참 🙅'].map(o => ({ orig: -1, text: o, votes: 0 }));
+  let items = ep ? ep.options.map((o, i) => ({ orig: i, text: o, votes: ep.voters[i].length, img: (ep.images || [])[i] || '' }))
+    : ['참석 🙋', '고민중 🤔', '불참 🙅'].map(o => ({ orig: -1, text: o, votes: 0, img: '' }));
   const drawOpts = () => {
     $('#optList').innerHTML = items.map((it, k) => `<div class="orow"><span class="no">${k + 1}</span>
+      <button class="oimg" data-oimg="${k}" title="이미지">${it.up ? '…' : it.img ? `<img data-img="${esc(it.img)}" src="${esc(imgSrc(it.img))}" alt=""><span class="x" data-ox="${k}">×</span>` : '📷'}</button>
       <input data-oi="${k}" value="${esc(it.text)}" maxlength="60" placeholder="항목 내용">
       ${it.votes ? `<span class="olock">투표 ${it.votes}명</span>` : `<button class="odel" data-od="${k}" ${items.length <= 2 ? 'disabled' : ''}>삭제</button>`}</div>`).join('');
     document.querySelectorAll('[data-oi]').forEach(inp => inp.oninput = () => { items[Number(inp.dataset.oi)].text = inp.value; });
     document.querySelectorAll('[data-od]').forEach(b => b.onclick = () => { items.splice(Number(b.dataset.od), 1); drawOpts(); });
+    document.querySelectorAll('[data-oimg]').forEach(b => b.onclick = async ev => {
+      const it = items[Number(b.dataset.oimg)]; if (!it || it.up) return;
+      if (ev.target.dataset.ox !== undefined) { it.img = ''; drawOpts(); return; }
+      const f = await pickImage(); if (!f) return;
+      it.up = true; drawOpts();
+      try {
+        const data = await shrinkImage(f);
+        const id = await run('api_uploadImage', me.id, data);
+        IMG[id] = data; try { localStorage.setItem('img:' + id, data); } catch (e) {}
+        it.img = id;
+      } catch (e) { toast(errMsg(e)); }
+      it.up = false; drawOpts();
+    });
   };
   drawOpts();
   $('#addOpt').onclick = () => {
     if (items.length >= 20) return toast('항목은 20개까지예요');
-    items.push({ orig: -1, text: '', votes: 0 }); drawOpts();
+    items.push({ orig: -1, text: '', votes: 0, img: '' }); drawOpts();
     const ins = document.querySelectorAll('[data-oi]'); ins[ins.length - 1].focus();
   };
   $('#cls').onclick = () => $('#modalRoot').innerHTML = '';
   $('#cGo').onclick = async () => {
     $('#cGo').classList.add('loading'); $('#cErr').textContent = '';
-    const kept = items.map(it => ({ orig: it.orig, text: it.text.trim() })).filter(it => it.text);
+    if (items.some(it => it.up)) { $('#cErr').textContent = '이미지를 올리는 중이에요. 잠시만요.'; $('#cGo').classList.remove('loading'); return; }
+    const kept = items.map(it => ({ orig: it.orig, text: it.text.trim(), img: it.img || '' })).filter(it => it.text);
     if (kept.length < 2) { $('#cErr').textContent = '항목을 2개 이상 적어주세요.'; $('#cGo').classList.remove('loading'); return; }
     const d = {
       type, title: $('#cT').value, date: $('#cD').value, deadline: $('#cDl').value,
-      options: kept.map(it => it.text), optionMap: kept.map(it => it.orig), multi: $('#cM').checked, desc: $('#cDesc').value,
+      options: kept.map(it => it.text), optionMap: kept.map(it => it.orig), images: kept.map(it => it.img), multi: $('#cM').checked, desc: $('#cDesc').value,
     };
     try {
       if (ep) {
@@ -388,6 +425,54 @@ function showCreate(ep) {
   };
 }
 
+/* ── 항목 이미지 ── */
+const IMG = {}, imgAsked = new Set();
+let imgTimer = null;
+function imgSrc(id) {
+  if (!id) return '';
+  if (IMG[id]) return IMG[id];
+  try { const v = localStorage.getItem('img:' + id); if (v) return (IMG[id] = v); } catch (e) {}
+  if (!imgAsked.has(id)) { imgAsked.add(id); clearTimeout(imgTimer); imgTimer = setTimeout(fetchImgs, 20); }
+  return '';
+}
+async function fetchImgs() {
+  const ids = [...imgAsked].filter(i => !IMG[i]);
+  if (!ids.length || !me) return;
+  try {
+    const r = await run('api_images', me.id, ids);
+    Object.keys(r).forEach(k => { IMG[k] = r[k]; try { localStorage.setItem('img:' + k, r[k]); } catch (e) {} });
+    document.querySelectorAll('img[data-img]').forEach(im => { const v = IMG[im.dataset.img]; if (v && im.getAttribute('src') !== v) im.src = v; });
+  } catch (e) { ids.forEach(i => imgAsked.delete(i)); }
+}
+function shrinkImage(file) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onerror = () => rej(new Error('이미지를 읽을 수 없어요'));
+    fr.onload = () => {
+      const im = new Image();
+      im.onerror = () => rej(new Error('이 형식의 이미지는 쓸 수 없어요'));
+      im.onload = () => {
+        const S = 200, cv = document.createElement('canvas'); cv.width = cv.height = S;
+        const x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, S, S);
+        const k = Math.max(S / im.width, S / im.height), w = im.width * k, h = im.height * k;
+        x.drawImage(im, (S - w) / 2, (S - h) / 2, w, h);
+        let q = 0.85, u = cv.toDataURL('image/jpeg', q);
+        while (u.length > 45000 && q > 0.35) { q -= 0.1; u = cv.toDataURL('image/jpeg', q); }
+        res(u);
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+function pickImage() {
+  return new Promise(res => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = () => res(inp.files && inp.files[0] || null);
+    inp.click();
+  });
+}
+
 /* ── 렌더링 ── */
 function pollCard(p, opts = {}) {
   const max = Math.max(1, ...p.voters.map(v => v.length));
@@ -395,14 +480,29 @@ function pollCard(p, opts = {}) {
   const st = p.open ? `<b class="cd ${isUrgent(p.deadline) ? 'urgent' : ''}" data-dl="${esc(p.deadline)}">${isUrgent(p.deadline) ? '⏰ ' : ''}${left(p.deadline)}</b>` : `<span class="badge closed">마감</span>`;
   const sel = pending[p.id] || p.mine;
   const changed = pending[p.id] && JSON.stringify(pending[p.id]) !== JSON.stringify(p.mine);
-  const optsHtml = p.options.map((o, i) => {
+  const imgs = p.images || [];
+  const optBtn = (o, i) => {
     const mine = p.mine.includes(i), picked = sel.includes(i), n = p.voters[i].length;
     return `<button class="opt ${picked ? 'mine' : ''} ${picked && !mine ? 'sel' : ''}" data-poll="${esc(p.id)}" data-i="${i}" ${p.open ? '' : 'disabled'}>
       <div class="bar" style="width:${n / max * 100}%"></div>
       <div class="row"><span class="no">${i + 1}</span><span class="lab">${esc(o)}</span><span class="cnt">${n ? n + '명' : ''}</span>${p.open ? '<span class="chk"></span>' : ''}</div>
       ${n ? `<div class="who">${p.voters[i].map(v => `<span class="chip ${gcls(v.g)} ${v.id === me.id ? 'me' : ''}">${esc(v.n)}</span>`).join('')}</div>` : ''}
     </button>`;
-  }).join('');
+  };
+  const imgCard = (o, i) => {
+    const mine = p.mine.includes(i), picked = sel.includes(i), n = p.voters[i].length;
+    return `<button class="icard ${picked ? 'mine' : ''} ${picked && !mine ? 'sel' : ''}" data-poll="${esc(p.id)}" data-i="${i}" ${p.open ? '' : 'disabled'}>
+      <img class="ithumb" data-img="${esc(imgs[i])}" src="${esc(imgSrc(imgs[i]))}" alt="">
+      <span class="itx"><span class="no">${i + 1}</span><span class="lab">${esc(o)}</span>
+        ${n ? `<span class="ifoot"><span class="who">${p.voters[i].map(v => `<span class="chip ${gcls(v.g)} ${v.id === me.id ? 'me' : ''}">${esc(v.n)}</span>`).join('')}</span><span class="cnt">${n}명</span></span>` : ''}
+      </span>${p.open ? '<span class="chk"></span>' : ''}
+    </button>`;
+  };
+  const withImg = p.options.map((o, i) => i).filter(i => imgs[i]);
+  const noImg = p.options.map((o, i) => i).filter(i => !imgs[i]);
+  const optsHtml = !withImg.length ? p.options.map(optBtn).join('')
+    : `<div class="igrid">${withImg.map(i => imgCard(p.options[i], i)).join('')}</div>`
+      + (noImg.length ? `<div class="etc">기타 선택</div>${noImg.map(i => optBtn(p.options[i], i)).join('')}` : '');
   let voteBtn = '';
   if (p.open) {
     const label = !changed ? (p.mine.length ? '✅ 투표 완료 (항목을 바꾸면 다시 투표할 수 있어요)' : '항목을 고른 뒤 투표하기')
@@ -567,7 +667,7 @@ function findPoll(id) {
 }
 
 function bind() {
-  document.querySelectorAll('.opt[data-poll]').forEach(b => b.onclick = async () => {
+  document.querySelectorAll('.opt[data-poll],.icard[data-poll]').forEach(b => b.onclick = async () => {
     const p = findPoll(b.dataset.poll); if (!p || !p.open) return;
     const i = Number(b.dataset.i);
     let ch = (pending[p.id] || p.mine).slice();
