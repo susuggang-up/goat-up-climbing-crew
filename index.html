@@ -86,7 +86,12 @@
   .calg .dot{position:relative;width:100%;max-width:46px;aspect-ratio:1;border-radius:50%;background:var(--card2);overflow:visible}
   .calg .dot img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:#fff}
   .calg .dot .tx{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:50%;background:#3a3a5a;font-size:10px;font-weight:700;line-height:1.1;padding:2px;overflow:hidden;word-break:keep-all}
-  .calg .dot .plus{position:absolute;right:-4px;top:-4px;background:var(--acc2);color:#fff;font-size:10px;font-weight:800;border-radius:99px;padding:1px 5px}
+  .calg .dot .split{display:flex;width:100%;height:100%;border-radius:50%;overflow:hidden;background:#fff}
+  .calg .dot .split>span{flex:1;min-width:0;height:100%;overflow:hidden;position:relative}
+  .calg .dot .split>span+span{border-left:1.5px solid #1c1c1e}
+  .calg .dot .split img{position:absolute;left:50%;top:0;height:100%;width:auto;aspect-ratio:1;transform:translateX(-50%);border-radius:0;max-width:none}
+  .calg .dot .split .tx{border-radius:0;font-size:9px}
+  .calg .dot .nbadge{position:absolute;right:-5px;top:-5px;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:#ff3b30;color:#fff;font-size:11px;font-weight:800;line-height:18px;text-align:center;box-shadow:0 0 0 2px #1c1c1e}
   .calg .d.on .dot{box-shadow:0 0 0 2px var(--acc)}
   .calsum{font-size:13px;color:var(--sub);margin:10px 0 4px}
   .callist{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;font-size:14px}
@@ -541,10 +546,10 @@ function drawCalendar() {
     if (k >= 35 && d.getMonth() !== mo - 1) break;
     const ds = ymOf(d) + '-' + String(d.getDate()).padStart(2, '0');
     const its = (days && d.getMonth() === mo - 1 && days[ds]) || [];
-    const f = its[0];
-    const dot = !f ? '' : f.i ? `<img data-img="${esc(f.i)}" src="${esc(imgSrc(f.i))}" alt="">` : `<span class="tx">${esc(noEmoji(f.t).slice(0, 6))}</span>`;
+    const one = (x, half) => x.i ? `<img data-img="${esc(x.i)}" src="${esc(imgSrc(x.i))}" alt="">` : `<span class="tx">${esc(noEmoji(x.t).slice(0, half ? 3 : 6))}</span>`;
+    const dot = !its.length ? '' : its.length === 1 ? one(its[0]) : `<span class="split"><span>${one(its[0], 1)}</span><span>${one(its[1], 1)}</span></span>`;
     cells += `<button class="d ${d.getMonth() !== mo - 1 ? 'other' : ''} ${ds === todayS ? 'today' : ''} ${d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''} ${calPick === ds ? 'on' : ''}" data-cd="${ds}" ${its.length ? '' : 'disabled'}>
-      <span class="dn">${d.getDate()}</span><span class="dot">${dot}${its.length > 1 ? `<span class="plus">+${its.length - 1}</span>` : ''}</span></button>`;
+      <span class="dn">${d.getDate()}</span><span class="dot">${dot}${its.length > 2 ? `<span class="nbadge">${its.length}</span>` : ''}</span></button>`;
   }
   const cnt = days ? Object.keys(days).length : 0;
   const pick = calPick && days && days[calPick];
