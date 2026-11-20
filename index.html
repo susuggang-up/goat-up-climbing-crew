@@ -475,6 +475,7 @@ function pickImage() {
   });
 }
 
+const noEmoji = s => String(s).replace(/[\p{Extended_Pictographic}\u200d\ufe0f\u{1F3FB}-\u{1F3FF}]/gu, '').replace(/\s+/g, ' ').trim() || String(s);
 /* ── 렌더링 ── */
 function pollCard(p, opts = {}) {
   const max = Math.max(1, ...p.voters.map(v => v.length));
@@ -495,7 +496,7 @@ function pollCard(p, opts = {}) {
     const mine = p.mine.includes(i), picked = sel.includes(i), n = p.voters[i].length;
     return `<button class="icard ${picked ? 'mine' : ''} ${picked && !mine ? 'sel' : ''}" data-poll="${esc(p.id)}" data-i="${i}" ${p.open ? '' : 'disabled'}>
       <span class="itop"><img class="ithumb" data-img="${esc(imgs[i])}" src="${esc(imgSrc(imgs[i]))}" alt="">
-      <span class="itx"><span class="no">${i + 1}</span><span class="lab">${esc(o)}</span></span></span>
+      <span class="itx"><span class="no">${i + 1}</span><span class="lab">${esc(noEmoji(o))}</span></span></span>
       ${n ? `<span class="ivote"><span class="who">${p.voters[i].map(v => `<span class="chip ${gcls(v.g)} ${v.id === me.id ? 'me' : ''}">${esc(v.n)}</span>`).join('')}</span><span class="cnt">${n}명</span></span>` : ''}
       ${p.open ? '<span class="chk"></span>' : ''}
     </button>`;
