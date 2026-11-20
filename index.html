@@ -74,6 +74,24 @@
   .cfm .bt button+button{border-left:1px solid #444}
   .cfm .bt .ok{color:#ff6b6b;font-weight:700}
   .cm .c b{margin-right:6px}
+  .calhd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .calhd b{font-size:20px}
+  .calg{display:grid;grid-template-columns:repeat(7,1fr);gap:6px 4px;text-align:center}
+  .calg .wd{font-size:12px;color:var(--sub);padding-bottom:2px}
+  .calg .wd.sun,.calg .d.sun .dn{color:#ff6b6b}.calg .wd.sat,.calg .d.sat .dn{color:#6ea8ff}
+  .calg .d{display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;color:var(--txt);padding:0}
+  .calg .dn{font-size:12px;color:var(--sub);line-height:18px;min-width:22px;border-radius:99px}
+  .calg .d.today .dn{background:#fff;color:#000;font-weight:800}
+  .calg .d.other{opacity:.35}
+  .calg .dot{position:relative;width:100%;max-width:46px;aspect-ratio:1;border-radius:50%;background:var(--card2);overflow:visible}
+  .calg .dot img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:#fff}
+  .calg .dot .tx{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:50%;background:#3a3a5a;font-size:10px;font-weight:700;line-height:1.1;padding:2px;overflow:hidden;word-break:keep-all}
+  .calg .dot .plus{position:absolute;right:-4px;top:-4px;background:var(--acc2);color:#fff;font-size:10px;font-weight:800;border-radius:99px;padding:1px 5px}
+  .calg .d.on .dot{box-shadow:0 0 0 2px var(--acc)}
+  .calsum{font-size:13px;color:var(--sub);margin:10px 0 4px}
+  .callist{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;font-size:14px}
+  .callist .it{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .callist .it img{width:28px;height:28px;border-radius:50%;object-fit:cover;background:#fff}
   .igrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
   .icard{position:relative;display:flex;flex-direction:column;align-items:stretch;text-align:left;width:100%;min-width:0;background:var(--card2);border:1.5px solid #3a3a3c;border-radius:16px;padding:8px;color:var(--txt);font-size:15px;min-height:76px}
   .icard[disabled]{opacity:1}
@@ -138,7 +156,7 @@
 </head>
 <body>
 <header>
-  <div class="top"><h1 id="appTitle">투표</h1><button class="me" id="meBtn" style="display:none"></button></div>
+  <div class="top"><h1 id="appTitle">투표</h1><div style="display:flex;gap:6px;align-items:center"><button class="me" id="calBtn" style="display:none" title="내 암장 달력">📅</button><button class="me" id="meBtn" style="display:none"></button></div></div>
   <nav>
     <button data-tab="daily" class="on">오늘 투표</button>
     <button data-tab="events">번개·원정</button>
@@ -476,6 +494,52 @@ function pickImage() {
 }
 
 const noEmoji = s => String(s).replace(/[\p{Extended_Pictographic}\u200d\ufe0f\u{1F3FB}-\u{1F3FF}]/gu, '').replace(/\s+/g, ' ').trim() || String(s);
+/* ── 내 암장 달력 ── */
+const calCache = {};
+let calMonth = '', calPick = '';
+function ymOf(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function showCalendar(month) {
+  calMonth = month || calMonth || ymOf(nowKST()); calPick = '';
+  $('#modalRoot').innerHTML = `<div class="modal" id="bg"><div class="sheet" id="calSheet"></div></div>`;
+  $('#bg').onclick = e => { if (e.target.id === 'bg') $('#modalRoot').innerHTML = ''; };
+  drawCalendar();
+  const m = calMonth;
+  run('api_myCalendar', me.id, m).then(r => { calCache[m] = r.days || {}; if (calMonth === m && $('#calSheet')) drawCalendar(); })
+    .catch(e => { if ($('#calSheet') && !calCache[m]) $('#calBody').innerHTML = `<div class="empty">${esc(errMsg(e))}</div>`; });
+}
+function drawCalendar() {
+  const box = $('#calSheet'); if (!box) return;
+  const [y, mo] = calMonth.split('-').map(Number);
+  const days = calCache[calMonth];
+  const first = new Date(y, mo - 1, 1), start = new Date(y, mo - 1, 1 - first.getDay());
+  const todayS = (() => { const t = nowKST(); return ymOf(t) + '-' + String(t.getDate()).padStart(2, '0'); })();
+  let cells = '';
+  for (let k = 0; k < 42; k++) {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + k);
+    if (k >= 35 && d.getMonth() !== mo - 1) break;
+    const ds = ymOf(d) + '-' + String(d.getDate()).padStart(2, '0');
+    const its = (days && d.getMonth() === mo - 1 && days[ds]) || [];
+    const f = its[0];
+    const dot = !f ? '' : f.i ? `<img data-img="${esc(f.i)}" src="${esc(imgSrc(f.i))}" alt="">` : `<span class="tx">${esc(noEmoji(f.t).slice(0, 6))}</span>`;
+    cells += `<button class="d ${d.getMonth() !== mo - 1 ? 'other' : ''} ${ds === todayS ? 'today' : ''} ${d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''} ${calPick === ds ? 'on' : ''}" data-cd="${ds}" ${its.length ? '' : 'disabled'}>
+      <span class="dn">${d.getDate()}</span><span class="dot">${dot}${its.length > 1 ? `<span class="plus">+${its.length - 1}</span>` : ''}</span></button>`;
+  }
+  const cnt = days ? Object.keys(days).length : 0;
+  const pick = calPick && days && days[calPick];
+  box.innerHTML = `
+    <div class="calhd"><button class="btn ghost" id="cPrev" style="padding:6px 14px">‹</button><b>${y}. ${String(mo).padStart(2, '0')}</b><button class="btn ghost" id="cNext" style="padding:6px 14px">›</button></div>
+    <div class="calsum">${esc(me.name)}님의 암장 기록 · ${days ? `이번 달 ${cnt}일` : '불러오는 중…'}</div>
+    <div id="calBody"><div class="calg">${['일', '월', '화', '수', '목', '금', '토'].map((w, i) => `<span class="wd ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${w}</span>`).join('')}${cells}</div></div>
+    ${pick ? `<div class="callist"><b>${calPick.slice(5).replace('-', '/')}</b>${pick.map(x => `<div class="it">${x.i ? `<img data-img="${esc(x.i)}" src="${esc(imgSrc(x.i))}" alt="">` : ''}<span>${esc(noEmoji(x.t))}</span>${x.k !== '데일리' ? `<span class="badge ${esc(x.k)}">${esc(x.k)}</span>` : ''}</div>`).join('')}</div>` : ''}
+    <div class="small" style="margin-top:10px">투표에서 고른 암장이 날짜별로 표시돼요. 날짜를 누르면 자세히 보여요.</div>
+    <div class="acts"><button class="btn ghost" id="cToday" style="flex:1">오늘</button><button class="btn ghost" id="cCls" style="flex:1">닫기</button></div>`;
+  const go = dm => { const d = new Date(y, mo - 1 + dm, 1); showCalendar(ymOf(d)); };
+  $('#cPrev').onclick = () => go(-1); $('#cNext').onclick = () => go(1);
+  $('#cToday').onclick = () => showCalendar(ymOf(nowKST()));
+  $('#cCls').onclick = () => $('#modalRoot').innerHTML = '';
+  box.querySelectorAll('[data-cd]').forEach(b => b.onclick = () => { calPick = calPick === b.dataset.cd ? '' : b.dataset.cd; drawCalendar(); });
+}
+
 /* ── 렌더링 ── */
 function pollCard(p, opts = {}) {
   const max = Math.max(1, ...p.voters.map(v => v.length));
@@ -726,7 +790,7 @@ function applyState(s, quiet) {
   clockSkew = toDate(s.now) - Date.now();
   try { localStorage.setItem(STATE_KEY, JSON.stringify(s)); } catch (e) {}
   $('#appTitle').textContent = s.title; document.title = s.title;
-  $('#meBtn').style.display = 'block'; $('#meBtn').textContent = '👤 ' + me.name;
+  $('#meBtn').style.display = $('#calBtn').style.display = 'block'; $('#meBtn').textContent = '👤 ' + me.name;
   const active = document.activeElement;
   if (!(quiet && active && active.tagName === 'INPUT' && active.value)) render();
   if (!me.gender && !$('#modalRoot').innerHTML) showGender(false);
@@ -764,6 +828,7 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   window.scrollTo(0, 0);
 });
 $('#meBtn').onclick = showMenu;
+$('#calBtn').onclick = () => { if (me) showCalendar(); };
 $('#fab').onclick = () => showCreate();
 
 // 30초마다 남은 시간 갱신, 2분마다 새로고침, 마감 지나면 바로 새로고침
@@ -779,7 +844,7 @@ setInterval(() => { if (tab !== 'history' && tab !== 'members') refresh(true); }
 me = await loadAsync();
 try { const ap = localStorage.getItem('climbVoteAdmin'); if (ap) run('api_checkAdmin', ap).then(ok => { if (ok) { admin = ap; render(); } else localStorage.removeItem('climbVoteAdmin'); }); } catch (e) {}
 if (me && me.id) {
-  try { const cs = JSON.parse(localStorage.getItem(STATE_KEY) || 'null'); if (cs && cs.me && cs.me.id === me.id) { state = cs; $('#appTitle').textContent = cs.title; $('#meBtn').style.display = 'block'; $('#meBtn').textContent = '👤 ' + me.name; render(); } } catch (e) {}
+  try { const cs = JSON.parse(localStorage.getItem(STATE_KEY) || 'null'); if (cs && cs.me && cs.me.id === me.id) { state = cs; $('#appTitle').textContent = cs.title; $('#meBtn').style.display = $('#calBtn').style.display = 'block'; $('#meBtn').textContent = '👤 ' + me.name; render(); } } catch (e) {}
   refresh(!!state);
 } else showAuth();
 })();
