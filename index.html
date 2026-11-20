@@ -105,7 +105,7 @@
   table{width:100%;border-collapse:collapse;font-size:14px}
   td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
   th{color:var(--sub);font-weight:600}
-  td.n{text-align:right}
+  td.n,th.n{text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -481,7 +481,7 @@ function renderHistory() {
           <button class="btn ghost" id="mNext" style="padding:6px 14px" ${newer ? '' : 'disabled'}>›</button>
         </div>
         <div class="small" style="text-align:center;margin-bottom:10px">데일리 투표 ${r.dailyTotal}회 · 번개·원정 ${r.eventTotal}회</div>
-        ${r.list.length ? `<table><tr><th>#</th><th>이름</th><th class="n">데일리</th><th class="n">번개·원정</th><th class="n">합계</th></tr>${
+        ${r.list.length ? `<table style="table-layout:fixed"><colgroup><col style="width:34px"><col><col style="width:62px"><col style="width:76px"><col style="width:44px"></colgroup><tr><th>#</th><th>이름</th><th class="n">데일리</th><th class="n">번개·원정</th><th class="n">합계</th></tr>${
           r.list.map((x, k) => `<tr><td>${medal[k] || k + 1}</td><td><span class="chip ${gcls(x.gender)} ${x.name === me.name ? 'me' : ''}">${esc(x.name)}</span></td><td class="n">${x.daily}${r.dailyTotal ? `<span class="small">/${r.dailyTotal}</span>` : ''}</td><td class="n">${x.event}</td><td class="n"><b>${x.daily + x.event}</b></td></tr>`).join('')}</table>`
           : '<div class="empty">이 달에는 기록이 없어요.</div>'}
         <div class="small" style="margin-top:8px">마감된 투표에 참여한 횟수 (마감일 기준)</div>`;
