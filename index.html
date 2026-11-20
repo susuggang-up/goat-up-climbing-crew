@@ -81,6 +81,10 @@
   .btn{background:var(--acc2);color:#fff;border:0;border-radius:12px;padding:11px 16px;font-size:15px;font-weight:700;white-space:nowrap}
   .btn.ghost{background:var(--card2);color:var(--txt)}
   .btn:disabled{opacity:.3}
+  button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .seg2{display:flex;background:var(--card2);border-radius:10px;padding:3px}
+  .seg2 button{flex:1;border:0;background:none;color:var(--sub);padding:7px;border-radius:8px;font-size:14px;font-weight:700}
+  .seg2 button.on{background:var(--acc2);color:#fff}
   .btn.red{background:#3a1f1f;color:#ff6b6b}
   .btn.full{width:100%;padding:14px}
   .small{font-size:12px;color:var(--sub)}
@@ -128,7 +132,8 @@ const LS_KEY = 'climbVoteUser';
 let me = null, state = null, tab = 'daily', admin = null;
 let pending = {}, editing = null;
 const gcls = g => g === '남' ? 'm' : (g === '여' ? 'f' : '');
-let hist = { type: '전체', page: 0, polls: [], more: false, open: {}, month: '' };
+let hist = { type: '전체', page: 0, polls: [], more: false, open: {}, loading: false, sMode: 'month', sPeriod: '' };
+const histCache = {};
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -459,37 +464,64 @@ function renderMembers() {
     .catch(e => { if (tab === 'members') m.innerHTML = `<div class="empty">${esc(errMsg(e))}</div>`; });
 }
 
+let statsCache = null, statsAt = 0, statsLoading = false;
+async function loadStats() {
+  if (statsLoading) return; statsLoading = true;
+  try {
+    const r = await run('api_stats', me.id);
+    if (r && r.byMonth) { statsCache = r.byMonth; statsAt = Date.now(); }
+  } catch (e) { if (!statsCache && $('#stats')) $('#stats').textContent = errMsg(e); }
+  statsLoading = false;
+  if (tab === 'history' && hist.type === '통계' && statsCache) drawStats();
+}
+function drawStats() {
+  const box = $('#stats'); if (!box || !statsCache) return;
+  const mode = hist.sMode || 'month';
+  const months = Object.keys(statsCache).sort().reverse();
+  const periods = mode === 'year' ? [...new Set(months.map(k => k.slice(0, 4)))] : months;
+  if (!periods.includes(hist.sPeriod)) hist.sPeriod = periods[0] || '';
+  const per = hist.sPeriod;
+  let dT = 0, eT = 0; const agg = {};
+  months.filter(k => per && k.startsWith(per)).forEach(k => {
+    const b = statsCache[k]; dT += b.d; eT += b.e;
+    Object.keys(b.u).forEach(n => {
+      const x = b.u[n], a = agg[n] || (agg[n] = { name: n, gender: x[0], daily: 0, event: 0 });
+      a.daily += x[1]; a.event += x[2]; if (x[0]) a.gender = x[0];
+    });
+  });
+  const list = Object.values(agg).sort((a, b) => (b.daily + b.event) - (a.daily + a.event) || b.daily - a.daily || (a.name < b.name ? -1 : 1));
+  const i = periods.indexOf(per);
+  const older = i >= 0 && i < periods.length - 1 ? periods[i + 1] : '';
+  const newer = i > 0 ? periods[i - 1] : '';
+  const label = !per ? '' : mode === 'year' ? `${per}년` : `${per.slice(0, 4)}년 ${+per.slice(5)}월`;
+  const medal = ['🥇', '🥈', '🥉'];
+  box.innerHTML = `
+    <div class="seg2"><button data-sm="month" class="${mode === 'month' ? 'on' : ''}">월별</button><button data-sm="year" class="${mode === 'year' ? 'on' : ''}">연도별</button></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:10px 0 6px">
+      <button class="btn ghost" id="mPrev" style="padding:6px 14px" ${older ? '' : 'disabled'}>‹</button>
+      <div style="font-size:17px;font-weight:800">${label}</div>
+      <button class="btn ghost" id="mNext" style="padding:6px 14px" ${newer ? '' : 'disabled'}>›</button>
+    </div>
+    <div class="small" style="text-align:center;margin-bottom:10px">데일리 투표 ${dT}회 · 번개·원정 ${eT}회</div>
+    ${list.length ? `<table style="table-layout:fixed"><colgroup><col style="width:34px"><col><col style="width:66px"><col style="width:76px"><col style="width:44px"></colgroup><tr><th>#</th><th>이름</th><th class="n">데일리</th><th class="n">번개·원정</th><th class="n">합계</th></tr>${
+      list.map((x, k) => `<tr><td>${medal[k] || k + 1}</td><td><span class="chip ${gcls(x.gender)} ${x.name === me.name ? 'me' : ''}">${esc(x.name)}</span></td><td class="n">${x.daily}${dT ? `<span class="small">/${dT}</span>` : ''}</td><td class="n">${x.event}</td><td class="n"><b>${x.daily + x.event}</b></td></tr>`).join('')}</table>`
+      : '<div class="empty">이 기간에는 기록이 없어요.</div>'}
+    <div class="small" style="margin-top:8px">마감된 투표에 참여한 횟수 (마감일 기준)</div>`;
+  box.querySelectorAll('[data-sm]').forEach(b => b.onclick = () => { if (hist.sMode !== b.dataset.sm) { hist.sMode = b.dataset.sm; hist.sPeriod = ''; drawStats(); } });
+  if (older) $('#mPrev').onclick = () => { hist.sPeriod = older; drawStats(); };
+  if (newer) $('#mNext').onclick = () => { hist.sPeriod = newer; drawStats(); };
+}
 function renderHistory() {
   const m = $('#main');
   const chips = ['전체', '데일리', '번개', '원정', '기타', '통계'].map(t => `<button data-ht="${t}" class="${hist.type === t ? 'on' : ''}">${t}</button>`).join('');
   if (hist.type === '통계') {
-    m.innerHTML = `<div class="chips">${chips}</div><div class="card" id="stats">불러오는 중…</div>`;
+    m.innerHTML = `<div class="chips">${chips}</div><div class="card" id="stats">${statsCache ? '' : '불러오는 중…'}</div>`;
     bindChips();
-    run('api_stats', me.id, hist.month || '').then(r => {
-      if (hist.type !== '통계' || !$('#stats')) return;
-      if (Array.isArray(r)) r = { month: '', months: [], dailyTotal: 0, eventTotal: 0, list: r };
-      hist.month = r.month;
-      const i = r.months.indexOf(r.month);
-      const older = i >= 0 && i < r.months.length - 1 ? r.months[i + 1] : '';
-      const newer = i > 0 ? r.months[i - 1] : '';
-      const [yy, mm] = (r.month || '').split('-');
-      const medal = ['🥇', '🥈', '🥉'];
-      $('#stats').innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <button class="btn ghost" id="mPrev" style="padding:6px 14px" ${older ? '' : 'disabled'}>‹</button>
-          <div style="font-size:17px;font-weight:800">${yy ? `${yy}년 ${+mm}월` : ''}</div>
-          <button class="btn ghost" id="mNext" style="padding:6px 14px" ${newer ? '' : 'disabled'}>›</button>
-        </div>
-        <div class="small" style="text-align:center;margin-bottom:10px">데일리 투표 ${r.dailyTotal}회 · 번개·원정 ${r.eventTotal}회</div>
-        ${r.list.length ? `<table style="table-layout:fixed"><colgroup><col style="width:34px"><col><col style="width:62px"><col style="width:76px"><col style="width:44px"></colgroup><tr><th>#</th><th>이름</th><th class="n">데일리</th><th class="n">번개·원정</th><th class="n">합계</th></tr>${
-          r.list.map((x, k) => `<tr><td>${medal[k] || k + 1}</td><td><span class="chip ${gcls(x.gender)} ${x.name === me.name ? 'me' : ''}">${esc(x.name)}</span></td><td class="n">${x.daily}${r.dailyTotal ? `<span class="small">/${r.dailyTotal}</span>` : ''}</td><td class="n">${x.event}</td><td class="n"><b>${x.daily + x.event}</b></td></tr>`).join('')}</table>`
-          : '<div class="empty">이 달에는 기록이 없어요.</div>'}
-        <div class="small" style="margin-top:8px">마감된 투표에 참여한 횟수 (마감일 기준)</div>`;
-      if (older) $('#mPrev').onclick = () => { hist.month = older; render(); };
-      if (newer) $('#mNext').onclick = () => { hist.month = newer; render(); };
-    }).catch(e => { if ($('#stats')) $('#stats').textContent = errMsg(e); });
+    if (statsCache) drawStats();
+    if (!statsCache || Date.now() - statsAt > 60000) loadStats();
     return;
   }
+  if (hist.loading && !hist.polls.length) { m.innerHTML = `<div class="chips">${chips}</div><div class="empty">불러오는 중…</div>`; bindChips(); return; }
   const items = hist.polls.map(p => {
     if (hist.open[p.id]) return pollCard(p);
     let best = -1, bi = -1; p.voters.forEach((v, i) => { if (v.length > best) { best = v.length; bi = i; } });
@@ -512,12 +544,21 @@ function bindChips() {
   });
 }
 async function loadHistory(page) {
-  if (page === 0) { hist.polls = []; $('#main').classList.add('loading'); }
+  const type = hist.type;
+  if (type === '통계') { if (tab === 'history') render(); return; }
+  if (page === 0) {
+    const ch = histCache[type];
+    if (ch) { hist.polls = ch.polls; hist.more = ch.more; hist.page = 0; hist.loading = false; }
+    else { hist.polls = []; hist.more = false; hist.loading = true; }
+    if (tab === 'history') render();
+  }
   try {
-    const r = await run('api_history', me.id, hist.type, page);
+    const r = await run('api_history', me.id, type, page);
+    if (hist.type !== type) return;
     hist.page = page; hist.more = r.more; hist.polls = page === 0 ? r.polls : hist.polls.concat(r.polls);
-  } catch (e) { toast(errMsg(e)); }
-  $('#main').classList.remove('loading');
+    if (page === 0) histCache[type] = { polls: r.polls, more: r.more };
+  } catch (e) { if (tab === 'history') toast(errMsg(e)); }
+  hist.loading = false;
   if (tab === 'history') render();
 }
 
@@ -586,6 +627,14 @@ function applyState(s, quiet) {
   const active = document.activeElement;
   if (!(quiet && active && active.tagName === 'INPUT' && active.value)) render();
   if (!me.gender && !$('#modalRoot').innerHTML) showGender(false);
+  prefetch();
+}
+let prefetched = false;
+async function prefetch() {
+  if (prefetched || !me) return; prefetched = true;
+  try { const r = await run('api_history', me.id, '전체', 0); if (!histCache['전체']) histCache['전체'] = { polls: r.polls, more: r.more }; } catch (e) {}
+  try { if (!membersCache) membersCache = await run('api_members', me.id); } catch (e) {}
+  loadStats();
 }
 async function act(action, ...args) { applyState(await run('api_act', me.id, action, args), true); }
 let refreshing = false;
@@ -607,7 +656,9 @@ function setTab() {
 }
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   tab = b.dataset.tab; setTab();
-  if (tab === 'history') { render(); loadHistory(0); } else render();
+  $('#main').classList.remove('loading');
+  if (tab === 'history') loadHistory(0); else render();
+  window.scrollTo(0, 0);
 });
 $('#meBtn').onclick = showMenu;
 $('#fab').onclick = () => showCreate();
